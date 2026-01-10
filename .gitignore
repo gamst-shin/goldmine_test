@@ -1,0 +1,23 @@
+# 1. 가상환경 (제일 중요! 이거 올라가면 답 없음)
+venv/
+env/
+.env
+
+# 2. 파이썬 컴파일 파일 (쓰레기 파일들)
+__pycache__/
+*.pyc
+
+# 3. 데이터베이스 (로컬 데이터는 올리지 않는 게 국룰)
+db.sqlite3
+db.sqlite3-journal
+
+# 4. OS 관련 잡다한 파일
+.DS_Store
+Thumbs.db
+
+# 5. IDE 설정 파일 (VS Code 등)
+.vscode/
+.idea/
+
+# 6. 미디어 파일 (이미지 등은 보통 S3 쓰거나 로컬에만 둠)
+media/

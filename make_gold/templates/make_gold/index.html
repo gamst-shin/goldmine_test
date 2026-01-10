@@ -1,0 +1,71 @@
+{% load humanize %} 
+<!DOCTYPE html>
+<html lang="ko" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>감스트금테스트</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .card-img-top { height: 200px; object-fit: cover; }
+        .price-tag { color: #ffd700; font-weight: bold; font-size: 1.1rem; }
+    </style>
+</head>
+<body>
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark border-bottom border-secondary mb-4">
+        <div class="container">
+            <a class="navbar-brand fw-bold text-warning" href="/">🛸 감테스트</a>
+            <form class="d-flex" method="GET" action="">
+                <input class="form-control me-2" type="search" name="q" placeholder="24k, 순금, 다이아..." value="{{ query }}">
+                <button class="btn btn-outline-warning" type="submit">Search</button>
+            </form>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div class="btn-group">
+                <a href="/" class="btn btn-outline-secondary {% if not region %}active{% endif %}">전체</a>
+                <a href="/?region=서울" class="btn btn-outline-secondary {% if region == '서울' %}active{% endif %}">서울</a>
+                <a href="/?region=경기" class="btn btn-outline-secondary {% if region == '경기' %}active{% endif %}">경기</a>
+                <a href="/?region=부산" class="btn btn-outline-secondary {% if region == '부산' %}active{% endif %}">부산</a>
+            </div>
+            <span class="text-secondary">
+                Minerals Found: <strong class="text-white">{{ total_count }}</strong>
+            </span>
+        </div>
+
+        <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-4">
+            {% for item in items %}
+            <div class="col">
+                <div class="card h-100 border-secondary">
+                    {% if item.image_url %}
+                        <img src="{{ item.image_url }}" class="card-img-top" alt="매물 이미지">
+                    {% else %}
+                        <div class="card-img-top bg-secondary d-flex align-items-center justify-content-center text-white">
+                            No Image
+                        </div>
+                    {% endif %}
+                    
+                    <div class="card-body">
+                        <h5 class="card-title text-truncate">{{ item.title }}</h5>
+                        <p class="card-text text-secondary small mb-1">📍 {{ item.location }}</p>
+                        <p class="card-text price-tag">₩ {{ item.price|intcomma }}</p>
+                        <a href="{{ item.url }}" target="_blank" class="btn btn-sm btn-primary w-100">상세보기</a>
+                    </div>
+                    <div class="card-footer bg-transparent border-secondary text-end">
+                        <small class="text-muted">{{ item.created_at|date:"Y-m-d" }}</small>
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-12 text-center py-5">
+                <h3 class="text-secondary">검색된 매물이 없습니다. (Not Enough Minerals)</h3>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</body>
+</html>
