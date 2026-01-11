@@ -1,70 +1,125 @@
 import os
+import sys
 import json
+import django
 import google.generativeai as genai
-from django.conf import settings
 
-# 1. API 키 설정 (나중에 settings.py나 환경변수로 빼는 게 정석이지만 일단 테스트용)
-# ★여기에 네 API 키를 넣어야 해 (발급 방법은 아래에 설명)
-GOOGLE_API_KEY = "API Key" 
+# =========================================================
+# [Portable Path] 어디서 실행하든 찰떡같이 경로 찾기
+# =========================================================
+
+# 1. 현재 파일(agent.py)의 위치를 기준으로 경로 계산
+#    (예: /home/ubuntu/project/make_gold/make_gold/agent.py)
+current_file_path = os.path.abspath(__file__)
+
+# 2. 앱 폴더 (make_gold)
+app_dir = os.path.dirname(current_file_path)
+
+# 3. 프로젝트 루트 (상위 폴더)
+project_root = os.path.dirname(app_dir)
+
+# 4. 시스템 경로에 추가 (이제 파이썬이 프로젝트 전체를 인식함)
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+# ---------------------------------------------------------
+# Django 환경 설정
+# ---------------------------------------------------------
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+django.setup()
+
+from make_gold.models import AuctionItem
+
+# ---------------------------------------------------------
+# Secrets 로드 (안전하게 Import)
+# ---------------------------------------------------------
+# sys.path에 app_dir가 포함되어 있으므로 바로 import 가능
+try:
+    # app_dir를 sys.path에 잠시 추가해서 확실하게 찾기
+    if app_dir not in sys.path:
+        sys.path.append(app_dir)
+        
+    import secrets as my_secrets
+    GOOGLE_API_KEY = getattr(my_secrets, "GOOGLE_API_KEY", "")
+    print(f"✅ 설정 파일 로드 성공")
+except ImportError:
+    GOOGLE_API_KEY = ""
+    print(f"⚠️ 설정 파일(secrets.py)을 찾을 수 없습니다.")
+
+# ---------------------------------------------------------
+# AI 설정
+# ---------------------------------------------------------
+if not GOOGLE_API_KEY:
+    print("🚨 API 키가 없습니다. secrets.py를 확인해주세요.")
+else:
+    print(f"🔑 API Key 확인 완료: {GOOGLE_API_KEY[:5]}*****")
 
 genai.configure(api_key=GOOGLE_API_KEY)
 
 def analyze_spec(description):
     """
-    공매 물품 설명을 분석하여 순수 금 무게와 가치를 평가하기 위한 JSON 데이터를 반환함.
+    텍스트 설명(description)을 분석하여 JSON 데이터를 반환
     """
-    
-    # 사용할 모델 선택 (Gemini 1.5 Flash가 빠르고 무료 쿼터에 최적)
     model = genai.GenerativeModel('gemini-flash-latest')
 
-    # 프롬프트 설계 (JSON 포맷 강제)
     prompt = f"""
-    너는 전문 귀금속 감정사야. 아래의 [공매 물품 설명]을 분석해서 정확한 JSON 데이터를 추출해.
+    너는 전문 귀금속 감정사야. 아래 [공매 물품 설명]을 분석해서 JSON 데이터를 추출해.
     
-    [분석 규칙]
+    [규칙]
     1. material: "GOLD", "SILVER", "DIAMOND", "OTHERS" 중 하나.
-    2. purity: 금일 경우 "24K", "18K", "14K", "UNKNOWN". (순금=24K)
-    3. weight_g: 전체 중량이 아니라 '순수 금의 추정 무게'를 그램(g) 단위로 환산해서 숫자만 출력.
-       - 1돈 = 3.75g
-       - "큐빅", "알" 등이 포함된 경우, 장식 무게를 제외하고 보수적으로(Min) 추정해.
-    4. confidence: 너의 분석 확신도 (0.0 ~ 1.0). 설명이 모호하면 낮게 잡아.
+    2. purity: "24K", "18K", "14K", "UNKNOWN". (순금=24K)
+    3. weight_g: 순수 금 무게(g)로 환산. (1돈=3.75g). 숫자만 출력.
+    4. risk_factor: 설명이 명확하면 "LOW", 애매하면 "HIGH".
     
-    [공매 물품 설명]
+    [입력]
     {description}
     
-    [출력 형식]
-    오직 JSON 포맷만 출력해. 마크다운 코드블럭(```json) 쓰지 말고 순수 텍스트 JSON만 줘.
+    [출력]
+    JSON 포맷만 출력 (Markdown backtick 없이).
     """
 
     try:
         response = model.generate_content(prompt)
-        result_text = response.text.strip()
-        
-        # 가끔 ```json ... ``` 이렇게 줄 때가 있어서 제거 처리
-        if result_text.startswith("```"):
-            result_text = result_text.replace("```json", "").replace("```", "").strip()
-
-        # JSON 파싱
-        data = json.loads(result_text)
-        return data
-
+        text = response.text.strip().replace("```json", "").replace("```", "")
+        return json.loads(text)
     except Exception as e:
-        print(f"!! AI 분석 실패: {e}")
-        # 에러 나면 기본값 반환 (죽지 않게)
-        return {"material": "UNKNOWN", "weight_g": 0, "risk": "HIGH"}
+        print(f"   ⚠️ AI 분석 에러: {e}")
+        return {"material": "UNKNOWN", "weight_g": 0, "risk_factor": "HIGH"}
 
-# --- 테스트 실행용 ---
+def run_batch_analysis():
+    print("\n=== 🤖 AI 분석 요원 투입 (Batch Start) ===")
+    
+    # 분석 안 된(risk_factor가 UNKNOWN인) 아이템만 가져오기
+    target_items = AuctionItem.objects.filter(risk_factor="UNKNOWN")
+    
+    count = target_items.count()
+    print(f">> 분석 대기 물량: {count}개")
+
+    if count == 0:
+        print(">> 모든 물건이 분석 완료 상태입니다. 퇴근합니다.")
+        return
+
+    for item in target_items:
+        print(f"   🔍 분석 중: {item.title[:20]}...", end=" ")
+        
+        try:
+            # 1. AI 분석 수행
+            result = analyze_spec(item.description)
+            
+            # 2. 결과 DB 업데이트
+            item.material = result.get('material', 'OTHERS')
+            item.purity = result.get('purity', 'UNKNOWN')
+            item.weight_g = result.get('weight_g', 0.0)
+            item.risk_factor = result.get('risk_factor', 'HIGH')
+            
+            item.save()
+            print(f"-> [완료] {item.weight_g}g / {item.purity}")
+            
+        except Exception as e:
+            print(f"-> [실패] {e}")
+            continue
+
+    print("=== 분석 작업 종료 ===")
+
 if __name__ == "__main__":
-    # 테스트 케이스
-    sample_text = "순금 24k 골드바 10돈 (보증서 있음)"
-    print(f"입력: {sample_text}")
-    
-    result = analyze_spec(sample_text)
-    print("결과:", result)
-    
-    print("-" * 30)
-    
-    sample_text2 = "18k 금반지 및 큐빅 등 총중량 5.0g"
-    print(f"입력: {sample_text2}")
-    result2 = analyze_spec(sample_text2)
-    print("결과:", result2)
+    run_batch_analysis()

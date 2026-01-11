@@ -21,3 +21,7 @@ Thumbs.db
 
 # 6. 미디어 파일 (이미지 등은 보통 S3 쓰거나 로컬에만 둠)
 media/
+
+# 7. 인증정보 파일
+secrets.py
+make_gold/secrets.py
