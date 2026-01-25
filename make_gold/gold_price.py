@@ -2,6 +2,7 @@ import time
 import re
 import sqlite3
 from datetime import datetime
+import os
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
@@ -12,9 +13,22 @@ from selenium.webdriver.support import expected_conditions as EC
 # ==========================================
 # 1. DB 관련 함수
 # ==========================================
+def get_db_connection():
+    """상위 폴더에 있는 db.sqlite3에 연결"""
+    # 1. 현재 파일(collect_history.py)의 절대 경로를 구함
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # 2. 부모 폴더(상위 폴더) 경로 구하기
+    parent_dir = os.path.dirname(current_dir)
+    
+    # 3. 경로 합치기 (부모폴더 + db.sqlite3)
+    db_path = os.path.join(parent_dir, 'db.sqlite3')
+    
+    return sqlite3.connect(db_path)
+
 def init_db():
     """DB 테이블이 없으면 생성"""
-    conn = sqlite3.connect('gold_data.db') 
+    conn = get_db_connection() 
     cur = conn.cursor()
     
     # [수정] price 타입을 REAL(실수) -> INTEGER(정수)로 변경
@@ -32,7 +46,7 @@ def init_db():
 def save_to_db(price):
     """가격을 DB에 저장"""
     # 들어오는 price는 이제 int형입니다.
-    conn = sqlite3.connect('gold_data.db')
+    conn = get_db_connection()
     cur = conn.cursor()
     
     today = datetime.now().strftime('%Y-%m-%d')
