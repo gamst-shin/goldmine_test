@@ -10,6 +10,7 @@ __pycache__/
 # 3. 데이터베이스 (로컬 데이터는 올리지 않는 게 국룰)
 db.sqlite3
 db.sqlite3-journal
+*.db
 
 # 4. OS 관련 잡다한 파일
 .DS_Store
